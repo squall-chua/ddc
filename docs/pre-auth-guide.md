@@ -79,6 +79,64 @@ To remove a keychain-stored credential:
 ddc auth logout gha
 ```
 
+## Helm
+
+Helm reads release data from the cluster, so it uses the **same kubeconfig as
+Kubernetes** — nothing extra to authenticate. Set `HELM_DRIVER` if your releases
+use a non-default storage backend.
+
+## Argo CD
+
+Pick one:
+
+- **Environment variables:**
+
+  ```
+  export ARGOCD_SERVER=argocd.example.com
+  export ARGOCD_AUTH_TOKEN=<read-only-account-token>
+  export ARGOCD_INSECURE=true   # only for self-signed servers
+  ```
+
+- **Reuse the `argocd` CLI:** if you have logged in with `argocd login`, ddc reads
+  the server and token from `~/.config/argocd/config`.
+
+- **Store a token in the keychain:**
+
+  ```
+  ddc auth login argocd
+  ```
+
+Pass `--server`/`--insecure` per command to override.
+
+**Recommended:** use an Argo CD account/token limited to read-only RBAC.
+
+## Docker
+
+Docker uses your local Docker environment — there is no secret for ddc to hold.
+Ensure the daemon is running and `DOCKER_HOST` (and any `DOCKER_*` TLS variables)
+point at it. For a read-only posture, point ddc at a daemon or context you only
+intend to inspect.
+
+## Jenkins
+
+Set the controller URL and credentials (the username is not a secret; the API
+token is):
+
+```
+export JENKINS_URL=https://jenkins.example.com
+export JENKINS_USER=<your-user>
+export JENKINS_TOKEN=<api-token>
+```
+
+Or store the token in the keychain (still set `JENKINS_URL`/`JENKINS_USER`):
+
+```
+ddc auth login jenkins
+```
+
+**Recommended:** use a Jenkins user with read-only (Overall/Read + Job/Read)
+permissions.
+
 ## Keeping the agent inside the guardrails
 
 `ddc`'s guarantees hold only if `ddc` is the agent's **single** capability for

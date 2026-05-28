@@ -86,6 +86,75 @@ ddc gha workflows list --repo o/r
    (or pass `--job <id>` for a specific one). Redacted automatically.
 4. Diagnose. To re-run or change the workflow, tell the user — do not do it.
 
+## Argo CD (`ddc argocd`)
+
+Target the server with `--server <host>` (or `ARGOCD_SERVER`); add `--insecure`
+for self-signed certs.
+
+```
+ddc argocd apps list                  # name, project, sync, health
+ddc argocd app get <name>             # source, destination, sync/health detail
+ddc argocd app resources <name>       # managed resources and their health
+```
+
+### Playbook: app OutOfSync / Degraded
+
+1. `ddc argocd apps list` — find the app; note SYNC and HEALTH.
+2. `ddc argocd app get <name>` — read the health message, target revision, dest.
+3. `ddc argocd app resources <name>` — find the Degraded/Missing resource.
+4. Cross-check that workload in the cluster with `ddc k8s describe pod …`.
+
+## Helm (`ddc helm`)
+
+```
+ddc helm list [-n <ns>] [-A]
+ddc helm status <release> -n <ns>
+ddc helm history <release> -n <ns>
+ddc helm values <release> -n <ns>     # redacted
+```
+
+### Playbook: release in a bad state
+
+1. `ddc helm list -A` — find the release; note STATUS (failed/pending-*).
+2. `ddc helm status <release> -n <ns>` — read the description.
+3. `ddc helm history <release> -n <ns>` — did a recent revision regress it?
+4. `ddc helm values <release> -n <ns>` — check supplied values.
+5. Inspect the rendered workloads with `ddc k8s …`.
+
+## Docker (`ddc docker`)
+
+Uses your Docker environment (`DOCKER_HOST`, socket).
+
+```
+ddc docker ps [-a]
+ddc docker inspect <container>
+ddc docker logs <container> [--tail 200]
+ddc docker images
+```
+
+### Playbook: container exiting / restarting
+
+1. `ddc docker ps -a` — find the container; note STATE/STATUS.
+2. `ddc docker inspect <container>` — exit code, OOMKilled, error.
+3. `ddc docker logs <container> --tail 200` — the failure output (redacted).
+
+## Jenkins (`ddc jenkins`)
+
+Target the controller with `--url <base-url>` (or `JENKINS_URL`). Folder jobs:
+pass `folder/job`.
+
+```
+ddc jenkins jobs list
+ddc jenkins build view <job> <number>
+ddc jenkins build logs <job> [number]   # defaults to last build; redacted
+```
+
+### Playbook: failed Jenkins build
+
+1. `ddc jenkins jobs list` — find the failing job (STATUS Failed).
+2. `ddc jenkins build view <job> <number>` — result, duration, timing.
+3. `ddc jenkins build logs <job> <number>` — console output.
+
 ## If a provider shows "not configured"
 
 Tell the user to pre-authenticate themselves; do not do it for them:
@@ -95,6 +164,12 @@ Tell the user to pre-authenticate themselves; do not do it for them:
   then re-run with `--env <context>` if needed.
 - **GitHub Actions:** set `GH_TOKEN` (a read-only / fine-grained token), or
   authenticate the `gh` CLI, or run `ddc auth login gha` (interactive).
+- **Helm:** same as Kubernetes — it uses the kubeconfig.
+- **Argo CD:** set `ARGOCD_SERVER` and `ARGOCD_AUTH_TOKEN` (a read-only account),
+  log in with the `argocd` CLI, or run `ddc auth login argocd`.
+- **Docker:** ensure the daemon is running and `DOCKER_HOST` points at it.
+- **Jenkins:** set `JENKINS_URL`, `JENKINS_USER`, and `JENKINS_TOKEN` (an API
+  token), or run `ddc auth login jenkins`.
 
 Point the user to `docs/pre-auth-guide.md` for details. They hold the secret; you
 never see it.

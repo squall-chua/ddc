@@ -13,11 +13,21 @@ import (
 	"github.com/squallchua/ddc/internal/provider"
 )
 
-const k8sLoginHelp = `Kubernetes uses your existing kubeconfig — ddc stores nothing.
+const kubeLoginHelp = `This provider uses your existing kubeconfig — ddc stores nothing.
 Authenticate with your cluster provider, for example:
   aws eks update-kubeconfig --name <cluster>
   gcloud container clusters get-credentials <cluster>
 Then select a context per command with --env <context>.`
+
+const dockerLoginHelp = `Docker uses your local Docker environment — ddc stores nothing.
+Ensure the daemon is running and DOCKER_HOST points at it.`
+
+// tokenProviders can have a token stored in the OS keychain via `ddc auth login`.
+var tokenProviders = map[string]string{
+	"gha":     "GitHub",
+	"jenkins": "Jenkins API",
+	"argocd":  "Argo CD",
+}
 
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -78,9 +88,9 @@ func newAuthLoginCmd() *cobra.Command {
 		Short: "Pre-authenticate a provider (interactive; intended for humans, not agents)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			switch args[0] {
-			case "gha":
-				fmt.Fprint(cmd.ErrOrStderr(), "Paste a GitHub token (input hidden): ")
+			name := args[0]
+			if label, ok := tokenProviders[name]; ok {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Paste a %s token (input hidden): ", label)
 				raw, err := term.ReadPassword(int(os.Stdin.Fd()))
 				fmt.Fprintln(cmd.ErrOrStderr())
 				if err != nil {
@@ -90,16 +100,21 @@ func newAuthLoginCmd() *cobra.Command {
 				if tok == "" {
 					return fmt.Errorf("no token entered")
 				}
-				if err := credential.KeychainSet("gha", flagEnv, credential.NewSecret(tok)); err != nil {
+				if err := credential.KeychainSet(name, flagEnv, credential.NewSecret(tok)); err != nil {
 					return fmt.Errorf("store token: %w", err)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Stored GitHub token in OS keychain for env %q.\n", envLabel())
+				fmt.Fprintf(cmd.OutOrStdout(), "Stored %s token in OS keychain for env %q.\n", label, envLabel())
 				return nil
-			case "k8s":
-				fmt.Fprintln(cmd.OutOrStdout(), k8sLoginHelp)
+			}
+			switch name {
+			case "k8s", "helm":
+				fmt.Fprintln(cmd.OutOrStdout(), kubeLoginHelp)
+				return nil
+			case "docker":
+				fmt.Fprintln(cmd.OutOrStdout(), dockerLoginHelp)
 				return nil
 			default:
-				return fmt.Errorf("unknown provider %q (known: %s)", args[0], strings.Join(provider.Names(), ", "))
+				return fmt.Errorf("unknown provider %q (known: %s)", name, strings.Join(provider.Names(), ", "))
 			}
 		},
 	}
