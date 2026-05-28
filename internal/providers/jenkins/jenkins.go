@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/squallchua/ddc/internal/credential"
-	"github.com/squallchua/ddc/internal/provider"
+	"github.com/squall-chua/ddc/internal/credential"
+	"github.com/squall-chua/ddc/internal/provider"
 )
 
 func init() { provider.Register("jenkins", New) }

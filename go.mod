@@ -1,4 +1,4 @@
-module github.com/squallchua/ddc
+module github.com/squall-chua/ddc
 
 go 1.26.0
 

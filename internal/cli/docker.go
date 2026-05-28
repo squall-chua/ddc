@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/squallchua/ddc/internal/providers/docker"
+	"github.com/squall-chua/ddc/internal/providers/docker"
 )
 
 func newDockerCmd() *cobra.Command {

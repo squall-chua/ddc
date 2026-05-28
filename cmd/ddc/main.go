@@ -6,7 +6,7 @@ package main
 import (
 	"os"
 
-	"github.com/squallchua/ddc/internal/cli"
+	"github.com/squall-chua/ddc/internal/cli"
 )
 
 func main() {

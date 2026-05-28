@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/squallchua/ddc/internal/credential"
+	"github.com/squall-chua/ddc/internal/credential"
 )
 
 func newTestProvider(t *testing.T, handler http.HandlerFunc) *Provider {

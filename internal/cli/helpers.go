@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/squallchua/ddc/internal/output"
-	"github.com/squallchua/ddc/internal/providers/gha"
-	"github.com/squallchua/ddc/internal/providers/k8s"
+	"github.com/squall-chua/ddc/internal/output"
+	"github.com/squall-chua/ddc/internal/providers/gha"
+	"github.com/squall-chua/ddc/internal/providers/k8s"
 )
 
 // flagRepo is the GitHub owner/repo target, shared by gha subcommands.

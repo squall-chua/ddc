@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/squallchua/ddc/internal/provider"
+	"github.com/squall-chua/ddc/internal/provider"
 )
 
 func init() { provider.Register("k8s", New) }

@@ -8,9 +8,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/squallchua/ddc/internal/credential"
-	"github.com/squallchua/ddc/internal/output"
-	"github.com/squallchua/ddc/internal/provider"
+	"github.com/squall-chua/ddc/internal/credential"
+	"github.com/squall-chua/ddc/internal/output"
+	"github.com/squall-chua/ddc/internal/provider"
 )
 
 const kubeLoginHelp = `This provider uses your existing kubeconfig — ddc stores nothing.

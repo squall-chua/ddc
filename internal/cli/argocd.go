@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/squallchua/ddc/internal/providers/argocd"
+	"github.com/squall-chua/ddc/internal/providers/argocd"
 )
 
 var (

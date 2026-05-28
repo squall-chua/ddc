@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/squallchua/ddc/internal/redact"
+	"github.com/squall-chua/ddc/internal/redact"
 )
 
 // Printer writes redacted command output as either text or JSON.

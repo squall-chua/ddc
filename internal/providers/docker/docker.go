@@ -16,7 +16,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 
-	"github.com/squallchua/ddc/internal/provider"
+	"github.com/squall-chua/ddc/internal/provider"
 )
 
 func init() { provider.Register("docker", New) }

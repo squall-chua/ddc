@@ -15,7 +15,7 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	"sigs.k8s.io/yaml"
 
-	"github.com/squallchua/ddc/internal/provider"
+	"github.com/squall-chua/ddc/internal/provider"
 )
 
 func init() { provider.Register("helm", New) }
