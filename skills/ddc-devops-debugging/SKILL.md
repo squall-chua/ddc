@@ -1,6 +1,6 @@
 ---
 name: ddc-devops-debugging
-description: Use when debugging Kubernetes workloads or GitHub Actions pipelines (crashlooping pods, failed deploys, broken CI runs). Drives the read-only `ddc` CLI, which is the ONLY tool to use for inspecting clusters and pipelines — never raw kubectl/gh, never reading credential files.
+description: Use when debugging deployments, clusters, or CI/CD pipelines end-to-end — crashlooping pods, failed rollouts, broken GitHub Actions/Jenkins builds, OutOfSync Argo CD apps, bad Helm releases, exited Docker containers. Drives the read-only `ddc` CLI to trace a failure from the user's entry point across Kubernetes, Helm, Argo CD, GitHub Actions, Jenkins, and Docker, then reports root cause and fix steps. `ddc` is the ONLY tool to use for this — never raw kubectl/gh/helm/docker/argocd, never reading credential files.
 ---
 
 # DevOps Debugging with `ddc`
@@ -35,6 +35,58 @@ ddc auth status
 
 Use `--env <context-or-name>` on any command to target a specific environment.
 Add `--json` to any command for machine-readable output.
+
+## How to debug end-to-end
+
+Work the problem as a chain, from the user's entry point down to the failing
+component. Use the per-provider playbooks below as the steps within this loop.
+
+1. **Anchor on the entry point.** Start from exactly what the user reported — a
+   symptom ("checkout is 500ing"), a service/app/repo name, a failed pipeline, an
+   alert, a URL. Don't broaden the investigation beyond it until you have reason to.
+
+2. **Establish scope, ask when ambiguous.** Run `ddc auth status` to see which
+   environments are reachable (the user pre-authenticated these — only these are
+   available to you). If the target environment or resource is unclear — multiple
+   reachable clusters/contexts, an unspecified namespace, several matching repos or
+   pods — **ask the user one concise question** naming the candidates rather than
+   guessing or scanning everything. Examples: "Which cluster context — `--env
+   staging` or `--env prod`?", "Which namespace is the checkout service in?".
+
+3. **Follow the dependency chain across tools.** Failures propagate across layers,
+   so cross provider boundaries to trace cause from effect. Common chains:
+   - CI/CD → runtime: GitHub Actions / Jenkins build → Argo CD app sync → Helm
+     release → Kubernetes Deployment → Pod → container logs.
+   - Runtime symptom → cause: unhealthy Service → Pods behind it → `describe` →
+     `events` → `logs --previous`.
+   Hop to the next layer using the evidence from the last (a failed deploy shows up
+   as a Degraded app, which shows up as a CrashLoopBackOff pod, whose previous-logs
+   hold the real error).
+
+4. **Gather evidence at each hop.** Prefer status/describe/events first, then logs.
+   Follow the concrete signal — restart counts, exit codes, OOMKilled, event
+   reasons, the first error line in logs. Stop pulling data once the cause is clear;
+   don't dump everything.
+
+5. **Stop and report.** When you can name the root cause (or have ruled the
+   reachable evidence dry), present the diagnosis summary below — do not keep
+   digging indefinitely, and never attempt a fix yourself.
+
+### Diagnosis summary (how to report)
+
+Present a tight summary, not a transcript. Structure it as:
+
+- **Problem** — one line: what is broken and where (environment + resource).
+- **Root cause** — the underlying reason, concise, grounded in specific evidence
+  you saw (name the command/field, e.g. "previous-instance logs show
+  `OOMKilled`, exit 137; memory limit 128Mi"). Explain *why* in plain terms.
+- **Impact** — what's affected (optional, when it adds clarity).
+- **Suggested fix** — concrete, numbered steps **for the user to run** (ddc is
+  read-only; you cannot apply them). Be specific (commands, files, values).
+- **If unconfirmed** — if evidence was insufficient, say what's still uncertain and
+  what additional access or input would confirm it.
+
+Keep explanations concise; lead with the conclusion, then the supporting evidence.
 
 ## Kubernetes (`ddc k8s`)
 
