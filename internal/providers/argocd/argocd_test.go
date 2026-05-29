@@ -2,11 +2,14 @@ package argocd
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/squall-chua/ddc/internal/credential"
 )
@@ -130,6 +133,36 @@ func TestDiffRendersUnifiedAndHidesSecrets(t *testing.T) {
 			(it.LiveState != "[hidden]" || it.TargetState != "[hidden]" || it.NormalizedLiveState != "[hidden]") {
 			t.Fatalf("secret state not sanitized for JSON: %+v", it)
 		}
+	}
+}
+
+func makeJWT(t *testing.T, payload string) string {
+	t.Helper()
+	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`))
+	body := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	return hdr + "." + body + ".sig"
+}
+
+func TestTokenExpDetectsExpiry(t *testing.T) {
+	past := makeJWT(t, fmt.Sprintf(`{"exp":%d}`, time.Now().Add(-24*time.Hour).Unix()))
+	exp, ok := tokenExp(past)
+	if !ok || !time.Now().After(exp) {
+		t.Fatalf("expired token not detected: ok=%v exp=%v", ok, exp)
+	}
+
+	future := makeJWT(t, fmt.Sprintf(`{"exp":%d}`, time.Now().Add(24*time.Hour).Unix()))
+	exp, ok = tokenExp(future)
+	if !ok || time.Now().After(exp) {
+		t.Fatalf("valid token wrongly flagged expired: ok=%v exp=%v", ok, exp)
+	}
+
+	// Non-expiring API token (no exp claim) and non-JWT strings must report ok=false
+	// so the caller never treats them as expired.
+	if _, ok := tokenExp(makeJWT(t, `{"sub":"ddc-readonly"}`)); ok {
+		t.Fatal("token without exp claim should report ok=false")
+	}
+	if _, ok := tokenExp("not-a-jwt"); ok {
+		t.Fatal("non-JWT should report ok=false")
 	}
 }
 

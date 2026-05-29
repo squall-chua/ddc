@@ -9,10 +9,16 @@
 package credential
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 )
+
+// ErrNotConfigured marks the absence of any credential/config for a provider, as
+// opposed to a credential that exists but is broken (expired, unreachable). The
+// CLI uses it to show "not configured" rather than surfacing it as an error.
+var ErrNotConfigured = errors.New("not configured")
 
 // Secret wraps a sensitive string so it cannot be accidentally logged. The
 // String, GoString, and MarshalJSON methods all return a redaction marker, so
@@ -87,5 +93,5 @@ func (s TokenSpec) Resolve() (TokenResult, error) {
 	if len(s.EnvVars) > 0 {
 		hint = fmt.Sprintf("set %s, or %s", strings.Join(s.EnvVars, "/"), hint)
 	}
-	return TokenResult{}, fmt.Errorf("no credential found for %q: %s", s.Provider, hint)
+	return TokenResult{}, fmt.Errorf("no credential found for %q: %s: %w", s.Provider, hint, ErrNotConfigured)
 }

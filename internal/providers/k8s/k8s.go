@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/squall-chua/ddc/internal/credential"
 	"github.com/squall-chua/ddc/internal/provider"
 )
 
@@ -62,7 +63,7 @@ func (p *Provider) Connect(ctx context.Context, env string) error {
 
 	restCfg, err := cc.ClientConfig()
 	if err != nil {
-		return fmt.Errorf("load kubeconfig: %w", err)
+		return fmt.Errorf("load kubeconfig: %w: %w", err, credential.ErrNotConfigured)
 	}
 	cs, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {

@@ -48,7 +48,7 @@ func (p *Provider) Name() string { return "jenkins" }
 func (p *Provider) Connect(ctx context.Context, env string) error {
 	p.URL = firstNonEmpty(p.URL, os.Getenv("JENKINS_URL"))
 	if p.URL == "" {
-		return fmt.Errorf("no Jenkins URL: pass --url or set JENKINS_URL")
+		return fmt.Errorf("no Jenkins URL: pass --url or set JENKINS_URL: %w", credential.ErrNotConfigured)
 	}
 	p.user = firstNonEmpty(os.Getenv("JENKINS_USER"), os.Getenv("JENKINS_USERNAME"))
 

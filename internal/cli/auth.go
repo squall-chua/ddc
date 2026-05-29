@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -60,7 +61,11 @@ func newAuthStatusCmd() *cobra.Command {
 				}
 				st := authStatus{Provider: name}
 				if err := p.Connect(cmd.Context(), flagEnv); err != nil {
-					st.Status = "not configured"
+					if errors.Is(err, credential.ErrNotConfigured) {
+						st.Status = "not configured"
+					} else {
+						st.Status = "error: " + firstLine(err.Error())
+					}
 				} else if id, err := p.Status(cmd.Context()); err != nil {
 					st.Status = "error: " + firstLine(err.Error())
 				} else {

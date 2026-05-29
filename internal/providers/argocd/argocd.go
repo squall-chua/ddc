@@ -8,6 +8,7 @@ package argocd
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -54,7 +55,7 @@ func (p *Provider) Connect(ctx context.Context, env string) error {
 
 	p.Server = firstNonEmpty(p.Server, os.Getenv("ARGOCD_SERVER"), cfgServer)
 	if p.Server == "" {
-		return fmt.Errorf("no Argo CD server: pass --server, set ARGOCD_SERVER, or log in with the argocd CLI")
+		return fmt.Errorf("no Argo CD server: pass --server, set ARGOCD_SERVER, or log in with the argocd CLI: %w", credential.ErrNotConfigured)
 	}
 
 	res, err := credential.TokenSpec{
@@ -73,6 +74,14 @@ func (p *Provider) Connect(ctx context.Context, env string) error {
 	}
 	p.token = res.Secret
 	p.source = res.Source
+
+	if exp, ok := tokenExp(p.token.Reveal()); ok && time.Now().After(exp) {
+		return fmt.Errorf("Argo CD session token expired %s ago (server %s).\n"+
+			"  quick fix:   run `argocd relogin` (or `argocd login %s`) to refresh, then retry\n"+
+			"  durable fix: create a read-only token with `argocd account generate-token` and set ARGOCD_AUTH_TOKEN\n"+
+			"               (a long-lived read-only token is the intended credential for agents; see docs/pre-auth-guide.md)",
+			humanDuration(time.Since(exp)), p.Server, p.Server)
+	}
 
 	if os.Getenv("ARGOCD_INSECURE") == "true" {
 		p.Insecure = true
@@ -333,6 +342,44 @@ func (p *Provider) get(ctx context.Context, path string, out any) error {
 		return fmt.Errorf("argocd: HTTP %d for %s", resp.StatusCode, path)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// tokenExp returns the expiry time from a JWT's exp claim. ok is false when tok
+// is not a parseable JWT or carries no exp (e.g. a non-expiring API token), in
+// which case the caller must not treat the token as expired. The token is parsed
+// locally and never logged.
+func tokenExp(tok string) (time.Time, bool) {
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		return time.Time{}, false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return time.Time{}, false
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil || claims.Exp == 0 {
+		return time.Time{}, false
+	}
+	return time.Unix(claims.Exp, 0), true
+}
+
+func humanDuration(d time.Duration) string {
+	if d < 0 {
+		d = -d
+	}
+	switch {
+	case d >= 24*time.Hour:
+		return fmt.Sprintf("%dd", int(d.Hours())/24)
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d >= time.Minute:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return "moments"
+	}
 }
 
 func firstNonEmpty(vs ...string) string {

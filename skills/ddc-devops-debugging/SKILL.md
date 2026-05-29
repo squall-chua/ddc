@@ -222,7 +222,11 @@ Tell the user to pre-authenticate themselves; do not do it for them:
   authenticate the `gh` CLI, or run `ddc auth login gha` (interactive).
 - **Helm:** same as Kubernetes — it uses the kubeconfig.
 - **Argo CD:** set `ARGOCD_SERVER` and `ARGOCD_AUTH_TOKEN` (a read-only account),
-  log in with the `argocd` CLI, or run `ddc auth login argocd`.
+  log in with the `argocd` CLI, or run `ddc auth login argocd`. If status instead
+  reads `error: … session token expired`, the user's SSO session lapsed — `ddc`
+  does not refresh SSO tokens. Tell the user to run `argocd relogin` to refresh it,
+  or (to avoid repeat expiry, recommended for agent use) set a long-lived read-only
+  `ARGOCD_AUTH_TOKEN`.
 - **Docker:** ensure the daemon is running and `DOCKER_HOST` points at it.
 - **Jenkins:** set `JENKINS_URL`, `JENKINS_USER`, and `JENKINS_TOKEN` (an API
   token), or run `ddc auth login jenkins`.
