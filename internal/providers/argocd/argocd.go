@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pmezard/go-difflib/difflib"
 	"sigs.k8s.io/yaml"
 
 	"github.com/squall-chua/ddc/internal/credential"
@@ -127,7 +128,18 @@ type application struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 		} `json:"health"`
+		History []revisionHistory `json:"history"`
 	} `json:"status"`
+}
+
+type revisionHistory struct {
+	ID         int64  `json:"id"`
+	Revision   string `json:"revision"`
+	DeployedAt string `json:"deployedAt"`
+	Source     struct {
+		Path           string `json:"path"`
+		TargetRevision string `json:"targetRevision"`
+	} `json:"source"`
 }
 
 // ListApps lists Argo CD applications.
@@ -189,6 +201,117 @@ func (p *Provider) Resources(ctx context.Context, name string) (Result, error) {
 		rows = append(rows, []string{n.Kind, n.Namespace, n.Name, n.Health.Status})
 	}
 	return Result{Headers: []string{"KIND", "NAMESPACE", "NAME", "HEALTH"}, Rows: rows, Items: tree.Nodes}, nil
+}
+
+// History returns an application's deployment history, most recent first.
+func (p *Provider) History(ctx context.Context, name string) (Result, error) {
+	var a application
+	if err := p.get(ctx, "/api/v1/applications/"+name, &a); err != nil {
+		return Result{}, err
+	}
+	hist := a.Status.History
+	rows := make([][]string, 0, len(hist))
+	for i := len(hist) - 1; i >= 0; i-- {
+		h := hist[i]
+		src := h.Source.Path
+		if h.Source.TargetRevision != "" {
+			src += "@" + h.Source.TargetRevision
+		}
+		rows = append(rows, []string{fmt.Sprintf("%d", h.ID), shortRev(h.Revision), h.DeployedAt, src})
+	}
+	return Result{Headers: []string{"ID", "REVISION", "DEPLOYED-AT", "SOURCE"}, Rows: rows, Items: hist}, nil
+}
+
+type resourceDiff struct {
+	Group               string `json:"group"`
+	Kind                string `json:"kind"`
+	Namespace           string `json:"namespace"`
+	Name                string `json:"name"`
+	TargetState         string `json:"targetState"`
+	LiveState           string `json:"liveState"`
+	NormalizedLiveState string `json:"normalizedLiveState"`
+	Modified            bool   `json:"modified"`
+}
+
+// Diff shows, per managed resource, the difference between live and desired
+// state as a unified diff. Secret bodies are never rendered (only that they
+// differ), consistent with ddc's no-secrets posture — in both text and JSON.
+func (p *Provider) Diff(ctx context.Context, name string) (string, any, error) {
+	var resp struct {
+		Items []resourceDiff `json:"items"`
+	}
+	if err := p.get(ctx, "/api/v1/applications/"+name+"/managed-resources", &resp); err != nil {
+		return "", nil, err
+	}
+
+	var b strings.Builder
+	changed := 0
+	sanitized := make([]resourceDiff, 0, len(resp.Items))
+	for _, it := range resp.Items {
+		isSecret := strings.EqualFold(it.Kind, "Secret")
+
+		s := it
+		if isSecret {
+			s.TargetState, s.LiveState, s.NormalizedLiveState = "[hidden]", "[hidden]", "[hidden]"
+		}
+		sanitized = append(sanitized, s)
+
+		if !it.Modified {
+			continue
+		}
+		changed++
+		fmt.Fprintf(&b, "===== %s %s/%s =====\n", resourceKind(it.Group, it.Kind), it.Namespace, it.Name)
+		if isSecret {
+			b.WriteString("(Secret differs — body hidden; ddc never exposes secret material)\n\n")
+			continue
+		}
+		live := it.NormalizedLiveState
+		if live == "" {
+			live = it.LiveState
+		}
+		ud := difflib.UnifiedDiff{
+			A:        difflib.SplitLines(jsonToYAML(live)),
+			B:        difflib.SplitLines(jsonToYAML(it.TargetState)),
+			FromFile: "live",
+			ToFile:   "desired",
+			Context:  3,
+		}
+		text, _ := difflib.GetUnifiedDiffString(ud)
+		if text == "" {
+			text = "(no textual diff)\n"
+		}
+		b.WriteString(text)
+		b.WriteString("\n")
+	}
+	if changed == 0 {
+		b.WriteString("No differences — application is in sync.\n")
+	}
+	return b.String(), sanitized, nil
+}
+
+func resourceKind(group, kind string) string {
+	if group == "" {
+		return kind
+	}
+	return group + "/" + kind
+}
+
+func jsonToYAML(j string) string {
+	if strings.TrimSpace(j) == "" {
+		return ""
+	}
+	y, err := yaml.JSONToYAML([]byte(j))
+	if err != nil {
+		return j
+	}
+	return string(y)
+}
+
+func shortRev(rev string) string {
+	if len(rev) >= 40 {
+		return rev[:7]
+	}
+	return rev
 }
 
 func (p *Provider) get(ctx context.Context, path string, out any) error {

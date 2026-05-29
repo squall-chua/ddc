@@ -147,6 +147,8 @@ for self-signed certs.
 ddc argocd apps list                  # name, project, sync, health
 ddc argocd app get <name>             # source, destination, sync/health detail
 ddc argocd app resources <name>       # managed resources and their health
+ddc argocd app diff <name>            # live vs desired (Secret bodies hidden)
+ddc argocd app history <name>         # deployment history, most recent first
 ```
 
 ### Playbook: app OutOfSync / Degraded
@@ -154,7 +156,9 @@ ddc argocd app resources <name>       # managed resources and their health
 1. `ddc argocd apps list` — find the app; note SYNC and HEALTH.
 2. `ddc argocd app get <name>` — read the health message, target revision, dest.
 3. `ddc argocd app resources <name>` — find the Degraded/Missing resource.
-4. Cross-check that workload in the cluster with `ddc k8s describe pod …`.
+4. If OutOfSync, `ddc argocd app diff <name>` — see exactly what drifted; and
+   `ddc argocd app history <name>` — check whether a recent sync caused it.
+5. Cross-check that workload in the cluster with `ddc k8s describe pod …`.
 
 ## Helm (`ddc helm`)
 

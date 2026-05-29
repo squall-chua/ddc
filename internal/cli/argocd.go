@@ -96,6 +96,44 @@ func newArgoAppCmd() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(get, resources)
+	history := &cobra.Command{
+		Use:   "history <name>",
+		Short: "Show the application's deployment history (most recent first)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := connectArgoCD(cmd)
+			if err != nil {
+				return err
+			}
+			res, err := p.History(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return renderList(cmd, res.Headers, res.Rows, res.Items)
+		},
+	}
+
+	diff := &cobra.Command{
+		Use:   "diff <name>",
+		Short: "Show the diff between live and desired state (Secret bodies hidden)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := connectArgoCD(cmd)
+			if err != nil {
+				return err
+			}
+			text, obj, err := p.Diff(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			pr := newPrinter(cmd)
+			if pr.AsJSON() {
+				return pr.JSON(obj)
+			}
+			return pr.Text(text)
+		},
+	}
+
+	cmd.AddCommand(get, resources, history, diff)
 	return cmd
 }
