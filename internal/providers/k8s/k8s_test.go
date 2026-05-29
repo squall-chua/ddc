@@ -22,7 +22,7 @@ func newTestProvider(objs ...runtime.Object) *Provider {
 func TestGetSecretsBlocked(t *testing.T) {
 	p := newTestProvider()
 	for _, kind := range []string{"secret", "secrets", "Secret"} {
-		_, err := p.Get(context.Background(), kind, "default", false)
+		_, err := p.Get(context.Background(), kind, "default", false, 0)
 		if err == nil {
 			t.Fatalf("expected %q to be blocked", kind)
 		}
@@ -50,7 +50,7 @@ func TestGetPodsSurfacesCrashLoop(t *testing.T) {
 		},
 	}
 	p := newTestProvider(pod)
-	res, err := p.Get(context.Background(), "pods", "default", false)
+	res, err := p.Get(context.Background(), "pods", "default", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestGetPodsSurfacesCrashLoop(t *testing.T) {
 func TestGetUsesOnlyReadVerbs(t *testing.T) {
 	p := newTestProvider()
 	for _, kind := range []string{"pods", "deployments", "services", "nodes", "events"} {
-		if _, err := p.Get(context.Background(), kind, "", true); err != nil {
+		if _, err := p.Get(context.Background(), kind, "", true, 0); err != nil {
 			t.Fatalf("get %s: %v", kind, err)
 		}
 	}
@@ -80,7 +80,7 @@ func TestGetUsesOnlyReadVerbs(t *testing.T) {
 
 func TestUnsupportedKindRejected(t *testing.T) {
 	p := newTestProvider()
-	if _, err := p.Get(context.Background(), "configmaps", "default", false); err == nil {
+	if _, err := p.Get(context.Background(), "configmaps", "default", false, 0); err == nil {
 		t.Fatal("expected unsupported kind to be rejected (no generic passthrough)")
 	}
 }

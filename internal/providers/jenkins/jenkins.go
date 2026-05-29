@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -139,13 +140,53 @@ func (p *Provider) ViewBuild(ctx context.Context, job, number string) (string, a
 	return sb.String(), b, nil
 }
 
-// BuildLogs returns the console text of a build. An empty number means the last
-// build.
-func (p *Provider) BuildLogs(ctx context.Context, job, number string) (string, error) {
+// BuildLogs returns a window of a build's console log. An empty number means the
+// last build. It fetches from byte offset skip via Jenkins' progressiveText
+// endpoint and reads at most limit bytes (limit <= 0 means no cap), so the CLI
+// never buffers an unbounded log in memory. It also returns the next byte offset
+// to resume from and whether more output remains beyond the returned window.
+func (p *Provider) BuildLogs(ctx context.Context, job, number string, skip, limit int64) (text string, next int64, more bool, err error) {
 	if number == "" {
 		number = "lastBuild"
 	}
-	return p.getText(ctx, jobPath(job)+"/"+number+"/consoleText")
+	if skip < 0 {
+		skip = 0
+	}
+	path := fmt.Sprintf("%s/%s/logText/progressiveText?start=%d", jobPath(job), number, skip)
+	req, err := p.newRequest(ctx, path)
+	if err != nil {
+		return "", 0, false, err
+	}
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return "", 0, false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", 0, false, fmt.Errorf("jenkins: HTTP %d for %s", resp.StatusCode, path)
+	}
+
+	var reader io.Reader = resp.Body
+	if limit > 0 {
+		reader = io.LimitReader(resp.Body, limit)
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return "", 0, false, err
+	}
+
+	next = skip + int64(len(data))
+	// X-Text-Size is the total bytes Jenkins holds for this log; X-More-Data is set
+	// while the build is still producing output. If we capped the read below the
+	// total, there is more to fetch even after the build finishes.
+	end := next
+	if v := resp.Header.Get("X-Text-Size"); v != "" {
+		if n, perr := strconv.ParseInt(v, 10, 64); perr == nil {
+			end = n
+		}
+	}
+	more = resp.Header.Get("X-More-Data") == "true" || next < end
+	return string(data), next, more, nil
 }
 
 func (p *Provider) newRequest(ctx context.Context, path string) (*http.Request, error) {
@@ -173,26 +214,6 @@ func (p *Provider) getJSON(ctx context.Context, path string, out any) error {
 		return fmt.Errorf("jenkins: HTTP %d for %s", resp.StatusCode, path)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-func (p *Provider) getText(ctx context.Context, path string) (string, error) {
-	req, err := p.newRequest(ctx, path)
-	if err != nil {
-		return "", err
-	}
-	resp, err := p.http.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("jenkins: HTTP %d for %s", resp.StatusCode, path)
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 func jobStatus(color string) string {

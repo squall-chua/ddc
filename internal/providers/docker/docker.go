@@ -108,8 +108,10 @@ func (p *Provider) Inspect(ctx context.Context, id string) (string, any, error) 
 	return b.String(), info, nil
 }
 
-// Logs returns container logs as text. tail of "" means all lines.
-func (p *Provider) Logs(ctx context.Context, id, tail string) (string, error) {
+// Logs returns container logs as text. tail of "" means all lines; limit caps
+// the bytes read (limit <= 0 means no cap) so a verbose container cannot exhaust
+// memory.
+func (p *Provider) Logs(ctx context.Context, id, tail string, limit int64) (string, error) {
 	if tail == "" {
 		tail = "all"
 	}
@@ -118,9 +120,15 @@ func (p *Provider) Logs(ctx context.Context, id, tail string) (string, error) {
 		return "", err
 	}
 	defer rc.Close()
+	var reader io.Reader = rc
+	if limit > 0 {
+		reader = io.LimitReader(rc, limit)
+	}
 	var buf strings.Builder
 	// Engine logs are multiplexed for non-TTY containers; demultiplex to text.
-	if _, err := stdcopy.StdCopy(&buf, &buf, rc); err != nil && err != io.EOF {
+	// Capping the stream can cut a frame mid-way, so treat unexpected EOF as a
+	// benign truncation rather than an error.
+	if _, err := stdcopy.StdCopy(&buf, &buf, reader); err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		return "", err
 	}
 	return buf.String(), nil

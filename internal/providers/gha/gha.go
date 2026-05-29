@@ -128,9 +128,10 @@ func (p *Provider) ViewRun(ctx context.Context, owner, repo string, runID int64)
 	return b.String(), map[string]any{"run": run, "jobs": jobs.Jobs}, nil
 }
 
-// RunLogs returns logs for a single job. When jobID is 0 it picks the first
-// failed job of the run.
-func (p *Provider) RunLogs(ctx context.Context, owner, repo string, runID, jobID int64) (string, error) {
+// RunLogs returns logs for a single job, reading at most limit bytes (limit <= 0
+// means no cap) so a large job log cannot exhaust memory. When jobID is 0 it
+// picks the first failed job of the run.
+func (p *Provider) RunLogs(ctx context.Context, owner, repo string, runID, jobID, limit int64) (string, error) {
 	if jobID == 0 {
 		jobs, _, err := p.client.Actions.ListWorkflowJobs(ctx, owner, repo, runID, &github.ListWorkflowJobsOptions{})
 		if err != nil {
@@ -150,7 +151,7 @@ func (p *Provider) RunLogs(ctx context.Context, owner, repo string, runID, jobID
 	if err != nil {
 		return "", err
 	}
-	return fetchText(ctx, u.String())
+	return fetchText(ctx, u.String(), limit)
 }
 
 // ListWorkflows lists the workflows defined in a repository.
@@ -175,8 +176,9 @@ func SplitRepo(s string) (owner, repo string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// fetchText downloads a pre-signed log URL (no auth needed) as text.
-func fetchText(ctx context.Context, url string) (string, error) {
+// fetchText downloads a pre-signed log URL (no auth needed) as text, reading at
+// most limit bytes (limit <= 0 means no cap).
+func fetchText(ctx context.Context, url string, limit int64) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -189,7 +191,11 @@ func fetchText(ctx context.Context, url string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("fetch logs: HTTP %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(resp.Body)
+	var reader io.Reader = resp.Body
+	if limit > 0 {
+		reader = io.LimitReader(resp.Body, limit)
+	}
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
 	}

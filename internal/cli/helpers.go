@@ -18,6 +18,12 @@ func newPrinter(cmd *cobra.Command) *output.Printer {
 	return output.NewPrinter(cmd.OutOrStdout(), flagJSON)
 }
 
+// noteTruncated writes a non-fatal truncation note to stderr, keeping stdout
+// (which may be JSON) clean.
+func noteTruncated(cmd *cobra.Command, format string, args ...any) {
+	fmt.Fprintf(cmd.ErrOrStderr(), "note: "+format+"\n", args...)
+}
+
 // renderList prints a table or JSON, honoring --json. Both paths are redacted.
 func renderList(cmd *cobra.Command, headers []string, rows [][]string, items any) error {
 	p := newPrinter(cmd)

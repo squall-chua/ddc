@@ -37,11 +37,12 @@ type Provider struct {
 var blockedKinds = map[string]bool{"secret": true}
 
 // Result is a renderable list: a table (Headers/Rows) plus the typed Items for
-// --json output.
+// --json output. Truncated is set when a row limit cut the result short.
 type Result struct {
-	Headers []string
-	Rows    [][]string
-	Items   any
+	Headers   []string
+	Rows      [][]string
+	Items     any
+	Truncated bool
 }
 
 func (p *Provider) Name() string { return "k8s" }
@@ -98,7 +99,9 @@ const credentialSourceKubeconfig = "kubeconfig"
 // Get lists resources of the given kind. Secret kinds are refused before any API
 // call. Unsupported kinds return an error rather than falling through to a
 // generic passthrough.
-func (p *Provider) Get(ctx context.Context, kind, namespace string, allNamespaces bool) (Result, error) {
+// Get lists at most limit items (limit <= 0 means no cap), so a busy namespace
+// cannot load an unbounded result set into memory.
+func (p *Provider) Get(ctx context.Context, kind, namespace string, allNamespaces bool, limit int64) (Result, error) {
 	norm := normalizeKind(kind)
 	if blockedKinds[norm] {
 		return Result{}, fmt.Errorf("blocked: reading Secret objects is disabled — ddc never exposes secrets to agents")
@@ -107,24 +110,28 @@ func (p *Provider) Get(ctx context.Context, kind, namespace string, allNamespace
 	if allNamespaces {
 		ns = metav1.NamespaceAll
 	}
+	opts := metav1.ListOptions{}
+	if limit > 0 {
+		opts.Limit = limit
+	}
 	switch norm {
 	case "pod":
-		return p.getPods(ctx, ns)
+		return p.getPods(ctx, ns, opts)
 	case "deployment":
-		return p.getDeployments(ctx, ns)
+		return p.getDeployments(ctx, ns, opts)
 	case "service":
-		return p.getServices(ctx, ns)
+		return p.getServices(ctx, ns, opts)
 	case "node":
-		return p.getNodes(ctx)
+		return p.getNodes(ctx, opts)
 	case "event":
-		return p.getEvents(ctx, ns)
+		return p.getEvents(ctx, ns, opts)
 	default:
 		return Result{}, fmt.Errorf("unsupported resource %q (supported: pods, deployments, services, nodes, events)", kind)
 	}
 }
 
-func (p *Provider) getPods(ctx context.Context, ns string) (Result, error) {
-	list, err := p.clientset.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
+func (p *Provider) getPods(ctx context.Context, ns string, opts metav1.ListOptions) (Result, error) {
+	list, err := p.clientset.CoreV1().Pods(ns).List(ctx, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -151,11 +158,11 @@ func (p *Provider) getPods(ctx context.Context, ns string) (Result, error) {
 			humanizeAge(pod.CreationTimestamp.Time),
 		})
 	}
-	return Result{Headers: []string{"NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"}, Rows: rows, Items: list.Items}, nil
+	return Result{Headers: []string{"NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"}, Rows: rows, Items: list.Items, Truncated: list.GetContinue() != ""}, nil
 }
 
-func (p *Provider) getDeployments(ctx context.Context, ns string) (Result, error) {
-	list, err := p.clientset.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
+func (p *Provider) getDeployments(ctx context.Context, ns string, opts metav1.ListOptions) (Result, error) {
+	list, err := p.clientset.AppsV1().Deployments(ns).List(ctx, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -172,11 +179,11 @@ func (p *Provider) getDeployments(ctx context.Context, ns string) (Result, error
 			humanizeAge(d.CreationTimestamp.Time),
 		})
 	}
-	return Result{Headers: []string{"NAMESPACE", "NAME", "READY", "AVAILABLE", "AGE"}, Rows: rows, Items: list.Items}, nil
+	return Result{Headers: []string{"NAMESPACE", "NAME", "READY", "AVAILABLE", "AGE"}, Rows: rows, Items: list.Items, Truncated: list.GetContinue() != ""}, nil
 }
 
-func (p *Provider) getServices(ctx context.Context, ns string) (Result, error) {
-	list, err := p.clientset.CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
+func (p *Provider) getServices(ctx context.Context, ns string, opts metav1.ListOptions) (Result, error) {
+	list, err := p.clientset.CoreV1().Services(ns).List(ctx, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -191,11 +198,11 @@ func (p *Provider) getServices(ctx context.Context, ns string) (Result, error) {
 			strings.Join(ports, ","), humanizeAge(s.CreationTimestamp.Time),
 		})
 	}
-	return Result{Headers: []string{"NAMESPACE", "NAME", "TYPE", "CLUSTER-IP", "PORTS", "AGE"}, Rows: rows, Items: list.Items}, nil
+	return Result{Headers: []string{"NAMESPACE", "NAME", "TYPE", "CLUSTER-IP", "PORTS", "AGE"}, Rows: rows, Items: list.Items, Truncated: list.GetContinue() != ""}, nil
 }
 
-func (p *Provider) getNodes(ctx context.Context) (Result, error) {
-	list, err := p.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+func (p *Provider) getNodes(ctx context.Context, opts metav1.ListOptions) (Result, error) {
+	list, err := p.clientset.CoreV1().Nodes().List(ctx, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -211,11 +218,11 @@ func (p *Provider) getNodes(ctx context.Context) (Result, error) {
 			n.Name, status, n.Status.NodeInfo.KubeletVersion, humanizeAge(n.CreationTimestamp.Time),
 		})
 	}
-	return Result{Headers: []string{"NAME", "STATUS", "VERSION", "AGE"}, Rows: rows, Items: list.Items}, nil
+	return Result{Headers: []string{"NAME", "STATUS", "VERSION", "AGE"}, Rows: rows, Items: list.Items, Truncated: list.GetContinue() != ""}, nil
 }
 
-func (p *Provider) getEvents(ctx context.Context, ns string) (Result, error) {
-	list, err := p.clientset.CoreV1().Events(ns).List(ctx, metav1.ListOptions{})
+func (p *Provider) getEvents(ctx context.Context, ns string, opts metav1.ListOptions) (Result, error) {
+	list, err := p.clientset.CoreV1().Events(ns).List(ctx, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -230,7 +237,7 @@ func (p *Provider) getEvents(ctx context.Context, ns string) (Result, error) {
 			humanizeAge(e.LastTimestamp.Time), e.Type, e.Reason, obj, e.Message,
 		})
 	}
-	return Result{Headers: []string{"LAST-SEEN", "TYPE", "REASON", "OBJECT", "MESSAGE"}, Rows: rows, Items: items}, nil
+	return Result{Headers: []string{"LAST-SEEN", "TYPE", "REASON", "OBJECT", "MESSAGE"}, Rows: rows, Items: items, Truncated: list.GetContinue() != ""}, nil
 }
 
 // DescribePod returns a detailed, crashloop-oriented view of a single pod plus
@@ -279,9 +286,10 @@ func (p *Provider) DescribePod(ctx context.Context, namespace, name string) (str
 	return b.String(), pod, nil
 }
 
-// Logs returns container logs. The caller is responsible for redacting the
-// returned text before display.
-func (p *Provider) Logs(ctx context.Context, namespace, pod, container string, previous bool, tail int64) (string, error) {
+// Logs returns container logs, reading at most limit bytes (limit <= 0 means no
+// cap) so a verbose pod cannot exhaust memory. tail bounds the number of lines
+// the API returns. The caller redacts the text before display.
+func (p *Provider) Logs(ctx context.Context, namespace, pod, container string, previous bool, tail, limit int64) (string, error) {
 	opts := &corev1.PodLogOptions{Container: container, Previous: previous}
 	if tail > 0 {
 		opts.TailLines = &tail
@@ -292,7 +300,11 @@ func (p *Provider) Logs(ctx context.Context, namespace, pod, container string, p
 		return "", err
 	}
 	defer rc.Close()
-	data, err := io.ReadAll(rc)
+	var reader io.Reader = rc
+	if limit > 0 {
+		reader = io.LimitReader(rc, limit)
+	}
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
 	}

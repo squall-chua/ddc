@@ -72,6 +72,7 @@ func newDockerInspectCmd() *cobra.Command {
 
 func newDockerLogsCmd() *cobra.Command {
 	var tail int
+	var limit int64
 	c := &cobra.Command{
 		Use:   "logs <container>",
 		Short: "Print container logs (redacted)",
@@ -85,9 +86,12 @@ func newDockerLogsCmd() *cobra.Command {
 			if tail > 0 {
 				tailArg = strconv.Itoa(tail)
 			}
-			out, err := p.Logs(cmd.Context(), args[0], tailArg)
+			out, err := p.Logs(cmd.Context(), args[0], tailArg, limit)
 			if err != nil {
 				return err
+			}
+			if limit > 0 && int64(len(out)) >= limit {
+				noteTruncated(cmd, "log capped at --limit %d bytes; raise --limit (0 = no limit) or use --tail", limit)
 			}
 			pr := newPrinter(cmd)
 			if pr.AsJSON() {
@@ -97,6 +101,7 @@ func newDockerLogsCmd() *cobra.Command {
 		},
 	}
 	c.Flags().IntVar(&tail, "tail", 0, "lines from the end of the log (0 = all)")
+	c.Flags().Int64Var(&limit, "limit", 1<<20, "max bytes to return (0 = no limit)")
 	return c
 }
 

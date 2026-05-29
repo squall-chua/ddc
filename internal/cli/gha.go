@@ -84,7 +84,7 @@ func newGHARunCmd() *cobra.Command {
 		},
 	}
 
-	var job int64
+	var job, limit int64
 	logs := &cobra.Command{
 		Use:   "logs <run-id>",
 		Short: "Print logs for a job in the run (defaults to the first failed job)",
@@ -102,9 +102,12 @@ func newGHARunCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out, err := p.RunLogs(cmd.Context(), owner, repo, runID, job)
+			out, err := p.RunLogs(cmd.Context(), owner, repo, runID, job, limit)
 			if err != nil {
 				return err
+			}
+			if limit > 0 && int64(len(out)) >= limit {
+				noteTruncated(cmd, "log capped at --limit %d bytes; raise --limit (0 = no limit)", limit)
 			}
 			pr := newPrinter(cmd)
 			if pr.AsJSON() {
@@ -114,6 +117,7 @@ func newGHARunCmd() *cobra.Command {
 		},
 	}
 	logs.Flags().Int64Var(&job, "job", 0, "job id (default: first failed job)")
+	logs.Flags().Int64Var(&limit, "limit", 1<<20, "max bytes to return (0 = no limit)")
 
 	cmd.AddCommand(view, logs)
 	return cmd

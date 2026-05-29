@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/squall-chua/ddc/internal/providers/jenkins"
@@ -73,10 +75,16 @@ func newJenkinsBuildCmd() *cobra.Command {
 		},
 	}
 
+	var skip, limit int64
 	logs := &cobra.Command{
 		Use:   "logs <job> [number]",
 		Short: "Print build console output (redacted; defaults to last build)",
-		Args:  cobra.RangeArgs(1, 2),
+		Long: `Print a build's console output.
+
+Logs can be huge, so output is windowed: --skip bytes are skipped from the start
+and at most --limit bytes are returned (use --limit 0 for the whole log). When
+more output remains, the next --skip offset is reported so you can page through.`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			number := ""
 			if len(args) == 2 {
@@ -86,17 +94,24 @@ func newJenkinsBuildCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out, err := p.BuildLogs(cmd.Context(), args[0], number)
+			out, next, more, err := p.BuildLogs(cmd.Context(), args[0], number, skip, limit)
 			if err != nil {
 				return err
 			}
 			pr := newPrinter(cmd)
 			if pr.AsJSON() {
-				return pr.JSON(map[string]string{"job": args[0], "logs": out})
+				return pr.JSON(map[string]any{
+					"job": args[0], "logs": out, "next_offset": next, "more": more,
+				})
+			}
+			if more {
+				out += fmt.Sprintf("\n[truncated — more output available; continue with --skip %d]", next)
 			}
 			return pr.Text(out)
 		},
 	}
+	logs.Flags().Int64Var(&skip, "skip", 0, "byte offset to start from (for paging)")
+	logs.Flags().Int64Var(&limit, "limit", 1<<20, "max bytes to return (0 = no limit)")
 
 	cmd.AddCommand(view, logs)
 	return cmd

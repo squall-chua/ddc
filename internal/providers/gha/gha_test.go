@@ -83,6 +83,29 @@ func TestListRunsParsesRows(t *testing.T) {
 	}
 }
 
+func TestFetchTextCapsBytes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, strings.Repeat("L", 10000))
+	}))
+	defer srv.Close()
+
+	capped, err := fetchText(context.Background(), srv.URL, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(capped) != 100 {
+		t.Fatalf("limit not enforced: got %d bytes, want 100", len(capped))
+	}
+
+	full, err := fetchText(context.Background(), srv.URL, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(full) != 10000 {
+		t.Fatalf("limit 0 should be unbounded: got %d bytes, want 10000", len(full))
+	}
+}
+
 func TestSplitRepo(t *testing.T) {
 	if _, _, err := SplitRepo("octocat/hello"); err != nil {
 		t.Fatalf("valid repo rejected: %v", err)
