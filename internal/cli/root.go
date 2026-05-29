@@ -50,6 +50,7 @@ inspecting clusters and pipelines.`,
 	root.AddCommand(newAuthCmd())
 	root.AddCommand(newK8sCmd())
 	root.AddCommand(newGHACmd())
+	root.AddCommand(newGitlabCmd())
 	root.AddCommand(newArgoCDCmd())
 	root.AddCommand(newJenkinsCmd())
 	root.AddCommand(newDockerCmd())

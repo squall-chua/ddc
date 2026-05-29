@@ -119,6 +119,45 @@ To remove a keychain-stored credential:
 ddc auth logout gha
 ```
 
+## GitLab CI
+
+### Create a token
+
+Least privilege is a **project access token** scoped to a single project:
+**Project → Settings → Access Tokens →** role **Reporter**, scope **`read_api`**,
+set an expiry, **Create**. Reporter can read pipelines, jobs, and job traces
+without any write access.
+
+For access across many projects, use a **personal access token** instead:
+**avatar → Edit profile → Access Tokens →** scope **`read_api`** (read-only),
+set an expiry, **Create**. Copy the token (shown once).
+
+### Give the token to ddc — pick one
+
+- **Environment variable** (add `GITLAB_HOST` for self-managed GitLab):
+
+  ```
+  export GITLAB_TOKEN=<your-read-only-token>
+  export GITLAB_HOST=https://gitlab.example.com   # omit for gitlab.com
+  ```
+
+- **Reuse the `glab` CLI:** `glab auth login` → authenticate via browser or paste
+  a token. `ddc` then reads the stored token from
+  `~/.config/glab-cli/config.yml` for that host.
+
+- **Store in the OS keychain** (interactive; token entry is hidden):
+
+  ```
+  ddc auth login gitlab
+  ```
+
+Select the project per command with `--project group/project` (or its numeric
+id), or set `GITLAB_PROJECT`. To remove a keychain-stored credential:
+
+```
+ddc auth logout gitlab
+```
+
 ## Helm
 
 Helm reads release data from the cluster, so it uses the **same kubeconfig as

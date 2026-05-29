@@ -26,6 +26,7 @@ Ensure the daemon is running and DOCKER_HOST points at it.`
 // tokenProviders can have a token stored in the OS keychain via `ddc auth login`.
 var tokenProviders = map[string]string{
 	"gha":     "GitHub",
+	"gitlab":  "GitLab",
 	"jenkins": "Jenkins API",
 	"argocd":  "Argo CD",
 }

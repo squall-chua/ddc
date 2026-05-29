@@ -1,6 +1,6 @@
 ---
 name: ddc-devops-debugging
-description: Use when debugging deployments, clusters, or CI/CD pipelines end-to-end — crashlooping pods, failed rollouts, broken GitHub Actions/Jenkins builds, OutOfSync Argo CD apps, bad Helm releases, exited Docker containers. Drives the read-only `ddc` CLI to trace a failure from the user's entry point across Kubernetes, Helm, Argo CD, GitHub Actions, Jenkins, and Docker, then reports root cause and fix steps. `ddc` is the ONLY tool to use for this — never raw kubectl/gh/helm/docker/argocd, never reading credential files.
+description: Use when debugging deployments, clusters, or CI/CD pipelines end-to-end — crashlooping pods, failed rollouts, broken GitHub Actions/GitLab CI/Jenkins builds, OutOfSync Argo CD apps, bad Helm releases, exited Docker containers. Drives the read-only `ddc` CLI to trace a failure from the user's entry point across Kubernetes, Helm, Argo CD, GitHub Actions, GitLab CI, Jenkins, and Docker, then reports root cause and fix steps. `ddc` is the ONLY tool to use for this — never raw kubectl/gh/glab/helm/docker/argocd, never reading credential files.
 ---
 
 # DevOps Debugging with `ddc`
@@ -10,10 +10,10 @@ use to inspect Kubernetes clusters and GitHub Actions pipelines.
 
 ## Safety contract — follow exactly
 
-- **Use only `ddc`.** Do NOT run `kubectl`, `helm`, `gh`, `docker`, `argocd`,
-  `curl` against these APIs, or `cat`/`read` any credential file (`~/.kube/config`,
-  `~/.config/gh/hosts.yml`, `.env`, etc.). `ddc` is read-only by construction;
-  raw tools are not.
+- **Use only `ddc`.** Do NOT run `kubectl`, `helm`, `gh`, `glab`, `docker`,
+  `argocd`, `curl` against these APIs, or `cat`/`read` any credential file
+  (`~/.kube/config`, `~/.config/gh/hosts.yml`, `~/.config/glab-cli/config.yml`,
+  `.env`, etc.). `ddc` is read-only by construction; raw tools are not.
 - **Never handle secrets.** `ddc` never prints secrets and redacts secret-looking
   values from all output. Do not ask the user to paste tokens, passwords, or
   kubeconfigs into the chat. Do not try to work around redaction — there is no
@@ -137,6 +137,26 @@ ddc gha workflows list --repo o/r
 3. `ddc gha run logs <run-id> --repo o/r` — prints the first failed job's logs
    (or pass `--job <id>` for a specific one). Redacted automatically.
 4. Diagnose. To re-run or change the workflow, tell the user — do not do it.
+
+## GitLab CI (`ddc gitlab`)
+
+Target a project with `--project group/project` (or its numeric id; or set
+`GITLAB_PROJECT`). For self-managed GitLab, set `--host` or `GITLAB_HOST`.
+
+```
+ddc gitlab pipelines list --project g/p [--ref <branch>] [--status failed] [--limit 20]
+ddc gitlab pipeline view <pipeline-id> --project g/p   # jobs + which failed
+ddc gitlab job logs <job-id> --project g/p             # job trace; redacted
+```
+
+### Playbook: failed pipeline
+
+1. `ddc gitlab pipelines list --project g/p --status failed` — find the failing
+   pipeline id.
+2. `ddc gitlab pipeline view <pipeline-id> --project g/p` — see which job failed
+   (note its id and `failure_reason`).
+3. `ddc gitlab job logs <job-id> --project g/p` — the failing job's trace.
+4. Diagnose. To retry or change the pipeline, tell the user — do not do it.
 
 ## Argo CD (`ddc argocd`)
 

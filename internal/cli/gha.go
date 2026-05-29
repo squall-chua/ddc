@@ -152,7 +152,7 @@ func newGHAWorkflowsCmd() *cobra.Command {
 func parseID(s string) (int64, error) {
 	id, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("invalid run id %q: must be a number", s)
+		return 0, fmt.Errorf("invalid id %q: must be a number", s)
 	}
 	return id, nil
 }

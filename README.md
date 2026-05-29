@@ -32,6 +32,7 @@ incidents and debugging while staying inside hard guardrails.
 | --- | --- | --- |
 | Kubernetes | `k8s` | `get <pods\|deployments\|services\|nodes\|events>`, `describe pod <name>`, `logs <pod>`, `events` |
 | GitHub Actions | `gha` | `runs list`, `run view <id>`, `run logs <id>`, `workflows list` |
+| GitLab CI | `gitlab` | `pipelines list`, `pipeline view <id>`, `job logs <id>` |
 | Argo CD | `argocd` | `apps list`, `app get <name>`, `app resources <name>` |
 | Jenkins | `jenkins` | `jobs list`, `build view <job> <n>`, `build logs <job> [n]` |
 | Docker | `docker` | `ps`, `inspect <container>`, `logs <container>`, `images` |
